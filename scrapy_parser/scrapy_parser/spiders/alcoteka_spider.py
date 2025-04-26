@@ -45,27 +45,23 @@ class AlkotekaSpider(scrapy.Spider):
 
         for category_url in self.INPUT_URLS:
             # Получаем название категории из ссылки
-            category_name = category_url.split('/')[-1]
+            category_slug: str = category_url.split('/')[-1]
 
             params: dict[str, str] = {
                 'city_uuid': city_id,
                 'page': '1',
                 'per_page': '10000',
-                'root_category_slug': category_name
+                'root_category_slug': category_slug
             }
 
             cat_url: str = f"https://alkoteka.com/web-api/v1/product?{urlencode(params)}"
-            self.logger.info(f"Создаю запрос для категории {category_name}: {cat_url}")
+            self.logger.info(f"Создаю запрос для категории {category_slug}: {cat_url}")
 
             yield scrapy.Request(
                 url=cat_url,
                 callback=self.parse_category,
                 meta={
-                    'category_name': category_name,
                     'city_id': city_id
-                },
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
                 },
                 dont_filter=True
             )
@@ -100,18 +96,7 @@ class AlkotekaSpider(scrapy.Spider):
                         "timestamp": int(time.time()),
                         "item_slug": slug
                     },
-                    headers={
-                        'accept': '*/*',
-                        'accept-language': 'ru,ru-RU;q=0.9,en-US;q=0.8,en;q=0.7,th;q=0.6',
-                        'priority': 'u=1, i',
-                        'sec-ch-ua': '"Google Chrome";v="135", "Not-A.Brand";v="8", "Chromium";v="135"',
-                        'sec-ch-ua-mobile': '?0',
-                        'sec-ch-ua-platform': '"Windows"',
-                        'sec-fetch-dest': 'empty',
-                        'sec-fetch-mode': 'cors',
-                        'sec-fetch-site': 'same-origin',
-                        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
-                    }
+                    dont_filter=True
                 )
         except json.JSONDecodeError:
             self.logger.error(f"Ошибка декодирования JSON")
