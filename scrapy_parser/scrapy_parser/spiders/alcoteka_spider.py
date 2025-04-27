@@ -3,8 +3,9 @@ import scrapy
 import time
 import json
 from urllib.parse import urlencode
+from scrapy import Request
 from scrapy.http import Response
-from typing import Any
+from typing import Any, Iterable
 from ..items import ScrapyItem
 
 
@@ -24,9 +25,10 @@ class AlkotekaSpider(scrapy.Spider):
         super().__init__(*args, **kwargs)
         self.city = city
         self.input_file_path = os.path.abspath(os.path.join(os.getcwd(), "input_urls.txt"))
+
         try:
             with open(self.input_file_path, 'r', encoding='utf-8') as inp_file:
-                self.INPUT_URLS = [line.strip() for line in inp_file if line.strip()]
+                self.INPUT_URLS: list[str] = [line.strip() for line in inp_file.readlines() if line]
         except FileNotFoundError:
             self.logger.error(f"Файл {self.input_file_path} не найден")
             self.INPUT_URLS = []
@@ -34,14 +36,14 @@ class AlkotekaSpider(scrapy.Spider):
             self.logger.error(f"Ошибка чтения файла {self.input_file_path}: {e}")
             self.INPUT_URLS = []
 
-    def start_requests(self):
+    def start_requests(self) -> Iterable[Request]:
         """Парсинг категорий из файла"""
         if not self.INPUT_URLS:
             self.logger.error("Нет категорий для обработки. Проверьте input_urls.txt")
             return
 
         # UUID требуемого города
-        city_id = self.CITIES_ID.get(self.city, self.CITIES_ID["Краснодар"])
+        city_id: str = self.CITIES_ID.get(self.city, self.CITIES_ID["Краснодар"])
 
         for category_url in self.INPUT_URLS:
             # Получаем название категории из ссылки
@@ -52,10 +54,10 @@ class AlkotekaSpider(scrapy.Spider):
                 'page': '1',
                 'per_page': '10000',
                 'root_category_slug': category_slug
-            }
+            } # Параметры 'page' и 'per_page' выбраны так, чтобы получить все товары данной категории разом
 
             cat_url: str = f"https://alkoteka.com/web-api/v1/product?{urlencode(params)}"
-            self.logger.info(f"Создаю запрос для категории {category_slug}: {cat_url}")
+            self.logger.info(f"Создаю запрос для категории {category_slug}")
 
             yield scrapy.Request(
                 url=cat_url,
@@ -66,7 +68,7 @@ class AlkotekaSpider(scrapy.Spider):
                 dont_filter=True
             )
 
-    def parse_category(self, response: Response):
+    def parse_category(self, response: Response) -> Iterable[Request]:
         """Парсинг списка товаров в категории."""
         city_id: str = response.meta['city_id']
 
@@ -83,7 +85,7 @@ class AlkotekaSpider(scrapy.Spider):
             self.logger.info(f"Количество товаров в категории {category_name}: {total_goods}")
 
             # Получаем список "slug" товаров
-            slugs: list[str] = list(map(lambda x: x.get('slug', ''), json_resp['results']))
+            slugs: list[str] = list(map(lambda x: x.get('slug'), json_resp['results']))
 
             for slug in slugs:
                 item_url: str = f"https://alkoteka.com/web-api/v1/product/{slug}?{urlencode({"city_uuid": city_id})}"
@@ -98,6 +100,7 @@ class AlkotekaSpider(scrapy.Spider):
                     },
                     dont_filter=True
                 )
+
         except json.JSONDecodeError:
             self.logger.error(f"Ошибка декодирования JSON")
         except Exception as exx:
@@ -118,13 +121,16 @@ class AlkotekaSpider(scrapy.Spider):
                 self.logger.info(f"Информации о товаре нет")
                 return
 
-            # Получаем "объем" из фильтров товара для названия
+            # Получаем маркетинговые фильтры
             volume: str = ""
+            market_filters: list[str] = []
             for filter_label in item.get('filter_labels', []):
                 filter_label: dict[str, Any]
+
                 if filter_label.get('filter') == "obem":
+                    # Получаем "объем" в отдельную переменную
                     volume: str = filter_label.get('title')
-                    break
+                market_filters.append(filter_label.get('title'))
 
             # Получаем характеристики товара
             brand: str = ""
@@ -143,7 +149,7 @@ class AlkotekaSpider(scrapy.Spider):
                     case "select":
                         all_chars[char['title']] = char['values'][0].get('name', '')
                     case "flag":
-                        all_chars[char['title']] = char['placeholder']
+                        all_chars[char['title']] = char.get('placeholder', '')
 
             # Создание объекта Item
             res_item = ScrapyItem()
@@ -151,9 +157,7 @@ class AlkotekaSpider(scrapy.Spider):
             res_item['RPC'] = item.get('vendor_code') # Артикул товара
             res_item['url'] = f"https://alkoteka.com/product/{item['category']['slug']}/{slug}"  # Ссылка на товар
             res_item['title'] = f"{item.get('name')} {volume}" if volume else f"{item.get('name')}"  # Название товара
-            res_item['marketing_tags'] = [
-                fl.get('title', '') for fl in item.get('filter_labels', []) # Список маркетинговых тэгов
-            ]
+            res_item['marketing_tags'] = market_filters
             res_item['brand'] = brand # Бренд товара
             res_item['section']: [
                 item['category']['parent'].get('name', ''), item['category'].get('name', '')

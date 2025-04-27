@@ -21,7 +21,7 @@ class ProxyMiddleware:
     def __init__(self, proxy_file_path: str, proxy_auth: dict):
         self.proxy_file_path = proxy_file_path
         self.proxy_auth = proxy_auth
-        self.proxies: list[str] = []
+        self.proxies = []
         self.proxy_cycle = None
         self._load_proxies()
 
@@ -46,7 +46,7 @@ class ProxyMiddleware:
 
         try:
             with open(self.proxy_file_path, 'r', encoding='utf-8') as proxy_file:
-                self.proxies = list(map(str.strip, proxy_file.readlines())) # Убираем символ переноса строки
+                self.proxies: list[str] = list(map(str.strip, proxy_file.readlines())) # Убираем символ переноса строки
         except Exception as e:
             self.logger.error(f"Ошибка чтения файла прокси {self.proxy_file_path}: {e}")
             return
@@ -70,8 +70,8 @@ class ProxyMiddleware:
 
         # Установка авторизации, если указаны учетные данные
         if self.proxy_auth:
-            username = self.proxy_auth.get('username', '')
-            password = self.proxy_auth.get('password', '')
+            username: str = self.proxy_auth.get('username', '')
+            password: str = self.proxy_auth.get('password', '')
             request.headers['Proxy-Authorization'] = basic_auth_header(username, password)
 
         self.logger.debug(f"Используется прокси: {proxy} для {request.url}")
@@ -84,7 +84,7 @@ class ProxyMiddleware:
 
     @staticmethod
     def _default_proxy_file_path() -> str:
-        """Получение пути к файлу прокси по умолчанию.
+        """Получение абсолютного пути к файлу прокси по умолчанию.
         """
         return os.path.abspath(os.path.join(os.getcwd(), "proxy_http_ip.txt"))
 
@@ -99,11 +99,11 @@ class ProxyRetryMiddleware:
     logger = logging.getLogger(__name__)
 
     def __init__(self, retry_http_codes: list[int], max_retries: int):
-        self.retry_http_codes = retry_http_codes # Список HTTP-кодов для повтора запроса.
-        self.max_retries = max_retries # Максимальное количество повторов для одного запроса.
+        self.retry_http_codes = retry_http_codes # Список HTTP-кодов для повтора запроса
+        self.max_retries = max_retries # Максимальное количество повторов для одного запроса
 
     @classmethod
-    def from_crawler(cls, crawler: Crawler) -> 'ProxyRetryMiddleware':
+    def from_crawler(cls, crawler: Crawler):
         """Создание middleware из настроек Scrapy.
         """
         retry_http_codes = crawler.settings.getlist('RETRY_HTTP_CODES', [403, 429])
@@ -115,7 +115,7 @@ class ProxyRetryMiddleware:
         """
         if response.status in self.retry_http_codes:
             # Проверяем количество предыдущих повторов
-            retries = request.meta.get('proxy_retry_count', 0)
+            retries: int = request.meta.get('proxy_retry_count', 0)
             if retries >= self.max_retries:
                 self.logger.error(
                     f"Достигнуто максимальное количество повторов ({self.max_retries}) "

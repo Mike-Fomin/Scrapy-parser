@@ -23,12 +23,13 @@ DEFAULT_REQUEST_HEADERS = {
 DOWNLOAD_DELAY = 0.3
 CONCURRENT_REQUESTS = 10 # Ограничение на 10 одновременных запросов
 AUTOTHROTTLE_ENABLED = True
-AUTOTHROTTLE_START_DELAY = 0.5
+AUTOTHROTTLE_START_DELAY = 0.3
 AUTOTHROTTLE_MAX_DELAY = 10.0
-AUTOTHROTTLE_TARGET_CONCURRENCY = 1.0
+AUTOTHROTTLE_TARGET_CONCURRENCY = 5.0
+AUTOTHROTTLE_HTTP_ERROR_CODES = [429, 503, 504]
 
 # Прокси
-PROXY_FILE_PATH = os.path.abspath(os.path.join(os.getcwd(), "proxy_http_ip.txt"))
+PROXY_FILE_PATH = "proxy_http_ip.txt"
 PROXY_AUTH = {
     'username': 'irusp1050411',
     'password': 'SGvSzxMcJb',
